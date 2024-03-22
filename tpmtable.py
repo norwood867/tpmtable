@@ -8,6 +8,10 @@ from textual import work
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal
 from textual.widgets import DataTable, Header
+from textual.widget import Widget
+
+
+
 
 try:
     from config import MQTT_HOST, MQTT_PORT, CLIENT_ID
@@ -38,6 +42,10 @@ def is_json(myjson):
 class PowerCal(App):
     """main widget with data table"""
     TITLE = "Tasmotas"
+    # Mimicking the CSS syntax
+               # Color name
+    # widget.styles.color = "$accent"            # Textual variable
+    # widget.styles.tint = "hsl(300, 20%, 70%)"  # HSL description
 
     monitor = ["topic", "name", "voltage", "current", "power", "factor"]
     var = {f"Var{k+1}": v for k, v in enumerate(monitor[2:])}
@@ -45,11 +53,12 @@ class PowerCal(App):
     def compose(self) -> ComposeResult:
         yield Header(name="Tasmotas", show_clock=False)
         yield Horizontal(
-            DataTable(id="tuning", show_cursor=False, classes="box"),
+            DataTable(id="tuning", show_cursor=False),
         )
 
 
     def on_mount(self):
+        self.styles.color = "red"
         table = self.query_one("#tuning", DataTable)
         for col in self.monitor:
             table.add_column(col, key=col)
@@ -60,7 +69,7 @@ class PowerCal(App):
         table = self.query_one("#tuning", DataTable)
         table.sort("name", key=lambda x: "-" if isinstance(x, type(None)) else x)
 
-    @work(exclusive=True)
+    @work(exclusive=False)
     async def mqtt(self):
         """_summary_"""
         tasmota = {}
@@ -70,6 +79,9 @@ class PowerCal(App):
             await client.subscribe("tele/+/LWT")
             await client.subscribe("stat/+/RESULT")
             await client.publish("cmnd/tasmotas/rule3", "1")
+            for i in range(1, 4):
+                await client.publish(f'cmnd/tasmotas/var{i}', "")
+
             async for message in client.messages:
                 t = message.topic.value
                 _, msgid, action = t.split("/")
