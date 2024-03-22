@@ -1,0 +1,15 @@
+#header {
+  dock: top;
+  height: 1;
+  content-align: center middle;
+  
+  color: white;
+}
+
+#tuning {
+    
+}
+
+#mqttlog {
+    
+}
