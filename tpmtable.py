@@ -127,6 +127,8 @@ class PowerCal(App):
                 power_table.update_cell(
                     row_key=msgid, column_key=self.var[key], value=value
                 )
+            else:
+                mqttlog.write_line(f"mqtt_results {msgid} {action} {jmsg}")
         else:
             mqttlog.write_line(f"mqtt_results {msgid} {action} {jmsg}")
 
