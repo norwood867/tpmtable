@@ -63,6 +63,10 @@ class PowerCal(App):
     """main widget with data table"""
 
     TITLE = "Tasmotas"
+    # Mimicking the CSS syntax
+               # Color name
+    # widget.styles.color = "$accent"            # Textual variable
+    # widget.styles.tint = "hsl(300, 20%, 70%)"  # HSL description
 
     CSS_PATH = "tpmtable.tcss"
 
