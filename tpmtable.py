@@ -41,7 +41,7 @@ class Temps:
         # self.temp_last_minute = []
         self.temp_last_five = defaultdict(dict)
 
-    def avg_temp(self, temp_json, mqttlog=None):
+    def avg_temp(self, temp_json):
         """calculate the average temperature over the last 5 minutes
             ugh, this is hard to read, clean it up later"""
         minute1 = []
@@ -180,7 +180,7 @@ class PowerCal(App):
                     continue
 
                 if message.topic.matches("temp_json"):
-                    m5, m1 = living_room.avg_temp(jmsg, mqttlog)
+                    m5, m1 = living_room.avg_temp(jmsg)
                     if jmsg["name"] == "living":
                         mqttlog.write_line(
                             f'{jmsg['t']} {jmsg['name']}: {m5:.2f} 5m, {m1:.2f} 1m'
