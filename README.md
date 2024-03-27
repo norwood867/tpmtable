@@ -21,7 +21,22 @@ Add the information specific for the environment:
 
     MQTT_HOST = 'fill in your mqtt host here'
     MQTT_PORT = 'add your mqtt port here'
+    MQTT_USER = "name that user"  
+    MQTT_PASS = "password"  
     CLIENT_ID = 'put your client id here'
 
 ### Run
     python tpmtable.py
+
+### Screen
+    Now split, the left is the powertable (for now) and the right is the log widget  
+    to dump mqtt messages that don't match, input or other stuff.
+
+### Input
+    sub <topic> or cmnd <topic> <action> <message or None if left off>
+
+## Special thanks to
+[vherolf](https://github.com/vherolf) for extending what I started.
+I've now included some of that extension into this update.    
+The textualize and aiomqtt developers,
+Yeah!
