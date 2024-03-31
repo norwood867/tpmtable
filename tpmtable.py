@@ -16,9 +16,17 @@ from textual.widgets import DataTable, Header, Input, Log
 from textual.suggester import SuggestFromList, Suggester
 from data import devices, actions
 from typing import Optional
+import re
 
 try:
-    from config import CLIENT_ID, DEFAULT_SUB_LIST, MQTT_HOST, MQTT_PORT, MQTT_PASS, MQTT_USER
+    from config import (
+        CLIENT_ID,
+        DEFAULT_SUB_LIST,
+        MQTT_HOST,
+        MQTT_PORT,
+        MQTT_PASS,
+        MQTT_USER,
+    )
 except ModuleNotFoundError as _:
     MQTT_HOST = "fill in your mqtt host here"
     MQTT_PORT = "add your mqtt port here"
@@ -36,95 +44,88 @@ def is_json(myjson):
     return j
 
 
+get_words = re.compile(r" +")
 
-class SuggestionsUpdatable(Suggester):
+class SuggestionsUpdateScroll(Suggester):
     """a suggester that can be updated with new topics and devices"""
+
     def __init__(self) -> None:
-        super().__init__(use_cache=False)
-        self.actions = [x.lower() for x in actions]
+        super().__init__(use_cache=False, case_sensitive=False)
+        self.actions = sorted(list(set([x.lower() for x in actions])))
         self.devices = devices
         self.choices = {}
 
         for device in devices:
             self.choices[device] = self.actions
-        self.choices['unsub'] = []
+        self.choices["unsub"] = []
 
     def action_remove_sub(self, unsub) -> bool:
         """unsubscribe from a topic"""
         try:
-            self.choices['unsub'].remove(unsub)
+            self.choices["unsub"].remove(unsub)
         except ValueError as _:
             return False
         return True
 
     def action_add_topic(self, name: str) -> None:
         """add a topic to the list of subscribed topics"""
-        self.choices['unsub'].append(name)
+        self.choices["unsub"].append(name)
 
     def action_add_device(self, name: str) -> None:
         """add a device to the list of devices"""
         self.choices[name] = self.actions
 
-    def create_lookup_list(self, a: list, b: list, prepend: Optional[list] = None):
-        '''create the combined lists'''
-        if prepend is None:
-            prepend = []
-        return prepend + [f'{x} {y}' for x in a for y in b]
-
     def action_input_previous(self, _current) -> None:
-        '''move to the previous suggestion'''
-        if ' ' in _current:
-            pieces = _current.split(' ')
-        else:
-            pieces = [_current]
-        
-        if pieces[0] not in self.choices:
-            return self.get_suggestion(_current)
-        try:
-            _newcurrent = self.choices[
-                            self.choices[
-                                pieces[0]].index(pieces[1]) - 1
-                                    % len(self.choices[pieces[0]])]
-        except ValueError as _:
-            return self.get_suggestion(_current)
-        return _newcurrent
+        """move to the previous suggestion"""
+        return self.up_down(_current, "up")
 
     def action_input_next(self, _current) -> None:
-        '''move to the next suggestion'''
-        if ' ' in _current:
-            pieces = _current.split(' ')
-        else:
-            pieces = [_current]
-        if pieces[0] not in self.choices:
+        """move to the next suggestion"""
+        return self.up_down(_current, "down")
+
+    def up_down(self, _current, direction: str) -> None:
+        """move up or down the list"""
+        print(f'currnet: {_current}')
+        direction = 1 if direction == "down" else -1
+        words = get_words.split(_current, maxsplit=2)
+        print(words)
+        if len(_current) == 0:
+            return list(self.choices)[0]
+        if words[0] not in self.choices:
             return self.get_suggestion(_current)
-        try:
-            _newcurrent = self.choices[self.choices[pieces[0]].index(pieces[1]) + 1 ]
-                                    #    % len(self.choices[pieces[0]])]
-        except ValueError as _:
-            return self.get_suggestion(_current)
-        return _newcurrent
-    
+        if len(words) == 1:
+            return words[0]
+        if len(words) == 2:
+            try:
+                idx = self.choices[words[0]].index(words[1])
+                print(idx)
+                newidx = (idx + direction) % len(self.choices[words[0]])
+                print(newidx)
+                words[1] = self.choices[words[0]][newidx]
+                print(words[1])
+            except ValueError as _:
+                return self.get_suggestion(_current)
+            return " ".join(words)
+        return _current
+
     async def get_suggestion(self, value: str) -> str | None:
         """get the first match on topics and commands"""
-        if ' ' in value:
-            v = value.split(' ')
-        else:
-            v = [value]
-        
-        if v[0] not in self.choices:
+        words = get_words.split(value, maxsplit=2)
+        if words[0] not in self.choices:
             try:
-                r = next(i for i in list(self.choices) if i.startswith(value))
+                r = next(i for i in list(self.choices) if i.startswith(words[0]))
                 return r
             except StopIteration as _:
                 return None
-        if len(v) > 1:
+        if len(words) > 1:
             try:
-                r = next(i for i in self.choices[v[0]] if i.startswith(v[1]))
-                return f'{v[0]} {r}'
+                r = next(i for i in self.choices[words[0]] if i.startswith(words[1]))
+                return f"{words[0]} {r}"
             except StopIteration as _:
-                return v[0]
+                return words[0]
+        return " ".join(words)
 
-    #self.query_one(Input).suggester.action_add_device('ebike') to add ebike
+    # self.query_one(Input).suggester.action_add_device('ebike') to add ebike
 
 
 class PowerCal(App):
@@ -134,10 +135,7 @@ class PowerCal(App):
 
     CSS_PATH = "tpmtable.tcss"
 
-
     AUTO_FOCUS = "#input"
-
-
 
     # client=None
     def __init__(self):
@@ -160,12 +158,12 @@ class PowerCal(App):
         )
         yield Input(
             id="input",
-            placeholder="<topic or devicename> <action> <value> OR . <action> <topic>",
-            suggester=SuggestionsUpdatable(),
+            placeholder="<devicename, topic, or unsub> <command, or topic>",
+            suggester=SuggestionsUpdateScroll(),
         )
 
     def on_mount(self) -> None:
-        '''set up the table and mqtt connection'''
+        """set up the table and mqtt connection"""
         self.styles.color = "red"
         power_table = self.query_one("#tuning", DataTable)
         for col in self.monitor:
@@ -173,10 +171,9 @@ class PowerCal(App):
         self.mqtt()
 
     def sort_by_name(self) -> None:
-        '''sort the table by device name'''
+        """sort the table by device name"""
         power_table = self.query_one("#tuning", DataTable)
         power_table.sort("name", key=lambda x: "-" if isinstance(x, type(None)) else x)
-
 
     def mqtt_results(
         self,
@@ -207,37 +204,41 @@ class PowerCal(App):
         else:
             mqttlog.write_line(f"mqtt_results {msgid} {action} {jmsg}")
 
-
     def action_input_previous(self) -> None:
-        '''move to the previous suggestion'''
+        """move to the previous suggestion"""
         self.query_one(Input).value = self.query_one(
             Input
         ).suggester.action_input_previous(self.query_one(Input)._suggestion)
 
-
     def action_input_next(self) -> None:
-        '''move to the next suggestion'''
+        """move to the next suggestion"""
         self.query_one(Input).value = self.value = self.query_one(
             Input
-        ).suggester.action_input_previous(self.query_one(Input)._suggestion)
-
+        ).suggester.action_input_next(self.query_one(Input)._suggestion)
 
     @on(Input.Submitted)
     async def input_sent(self, message: Input.Submitted) -> None:
-        '''listen for input and send to mqtt server'''
+        """listen for input and send to mqtt server"""
         log = self.query_one("#mqttlog", Log)
         log.write_line(f"{message}")
         m = message.value.split(" ")
-        if message.value.startswith("."):
-            #do the attion
-            pass
-        else:
-            if 'all' in m[0]:
-                m[0] = 'tasmotas'
-            while len(m) != 3:
-                m.append(None)
-            await self.client.publish(f"cmnd/{m[0]}/{m[1]}", m[2])
-
+        if "all" in m[0]:
+            m[0] = "tasmotas"
+        if m[0].startswith("unsub"):
+            self.query_one(Input).suggester.action_remove_sub(m[1])
+            await self.client.unsubscribe(m[1])
+            return
+        if m[0].startswith("sub"):
+            await self.client.subscribe(m[1])
+            return
+        if 'exit' in m[0]:
+            exit()
+        if message.value == 'show sub':
+            log.write_line(" ".join(self.query_one(Input).suggester.choices["unsub"]))
+            return
+        while len(m) != 3:
+            m.append(None)
+        await self.client.publish(f"cmnd/{m[0]}/{m[1]}", m[2])
 
     @work(exclusive=False)
     async def mqtt(self) -> None:
@@ -247,15 +248,19 @@ class PowerCal(App):
         mqttlog = self.query_one("#mqttlog", Log)
 
         async with Client(
-            MQTT_HOST, port=MQTT_PORT, identifier=CLIENT_ID, username=MQTT_USER, password=MQTT_PASS
+            MQTT_HOST,
+            port=MQTT_PORT,
+            identifier=CLIENT_ID,
+            username=MQTT_USER,
+            password=MQTT_PASS,
         ) as self.client:
             for sub in DEFAULT_SUB_LIST:
                 await self.client.subscribe(sub)
+                print(sub)
                 self.query_one(Input).suggester.action_add_topic(sub)
 
             for i in range(1, 4):
                 await self.client.publish(f"cmnd/tasmotas/var{i}", "")
-
 
             async for message in self.client.messages:
                 t = message.topic.value
@@ -272,7 +277,6 @@ class PowerCal(App):
                 if message.topic.matches("stat/+/RESULT"):
                     self.mqtt_results(power_table, mqttlog, msgid, action, jmsg)
                     continue
-
 
                 if (
                     msgid is not None
@@ -291,17 +295,3 @@ if __name__ == "__main__":
     app = PowerCal()
     app.run()
 
-
-
-#to delete
-        # if message.value.startswith("sub"):
-        #     await self.client.subscribe(m[1])
-        # elif message.value.startswith("unsub"):
-        #     await self.client.unsubscribe(m[1])
-        # elif message.value.startswith("cmnd"):
-        #     while len(m) != 4:
-        #         m.append(None)
-        #     await self.client.publish(f"cmnd/{m[1]}/{m[2]}", m[3])
-        # else:
-        #     self.notify(f"Unknown: {message.value}")
-            # log.write_line(f"{message.value}")
