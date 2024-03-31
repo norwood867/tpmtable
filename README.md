@@ -33,7 +33,7 @@ Add the information specific for the environment:
     to dump mqtt messages that don't match, input or other stuff.
 
 ### Input
-    sub <topic> or cmnd <topic> <action> <message or None if left off>
+    command, right suggestions and up/down to scroll the list.
 
 ## Special thanks to
 [vherolf](https://github.com/vherolf) for extending what I started.
