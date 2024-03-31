@@ -40,7 +40,7 @@ def is_json(myjson):
     try:
         j = json.loads(myjson)
     except ValueError as _:
-        return ""
+        return None
     return j
 
 
@@ -50,7 +50,7 @@ class SuggestionsUpdateScroll(Suggester):
     """a suggester that can be updated with new topics and devices"""
 
     def __init__(self) -> None:
-        super().__init__(use_cache=False, case_sensitive=False)
+        super().__init__(use_cache=False, case_sensitive=True)
         self.actions = sorted(list(set([x.lower() for x in actions])))
         self.devices = devices
         self.choices = {}
@@ -85,10 +85,9 @@ class SuggestionsUpdateScroll(Suggester):
 
     def up_down(self, _current, direction: str) -> None:
         """move up or down the list"""
-        print(f'currnet: {_current}')
         direction = 1 if direction == "down" else -1
         words = get_words.split(_current, maxsplit=2)
-        print(words)
+    
         if len(_current) == 0:
             return list(self.choices)[0]
         if words[0] not in self.choices:
@@ -98,11 +97,8 @@ class SuggestionsUpdateScroll(Suggester):
         if len(words) == 2:
             try:
                 idx = self.choices[words[0]].index(words[1])
-                print(idx)
                 newidx = (idx + direction) % len(self.choices[words[0]])
-                print(newidx)
                 words[1] = self.choices[words[0]][newidx]
-                print(words[1])
             except ValueError as _:
                 return self.get_suggestion(_current)
             return " ".join(words)
@@ -124,8 +120,6 @@ class SuggestionsUpdateScroll(Suggester):
             except StopIteration as _:
                 return words[0]
         return " ".join(words)
-
-    # self.query_one(Input).suggester.action_add_device('ebike') to add ebike
 
 
 class PowerCal(App):
@@ -230,6 +224,7 @@ class PowerCal(App):
             return
         if m[0].startswith("sub"):
             await self.client.subscribe(m[1])
+            self.query_one(Input).suggester.action_add_topic(m[1])
             return
         if 'exit' in m[0]:
             exit()
@@ -256,7 +251,6 @@ class PowerCal(App):
         ) as self.client:
             for sub in DEFAULT_SUB_LIST:
                 await self.client.subscribe(sub)
-                print(sub)
                 self.query_one(Input).suggester.action_add_topic(sub)
 
             for i in range(1, 4):
@@ -287,11 +281,12 @@ class PowerCal(App):
                     await self.client.publish(f"cmnd/{msgid}/devicename", "")
                     self.query_one(Input).suggester.action_add_device(msgid)
                     continue
-
-                mqttlog.write_line(f"main section: {msgid} {jmsg}")
+                
+                if jmsg:
+                    mqttlog.write_line(f"{jmsg}")
+                else: mqttlog.write_line(f"{msgid} {action} {msg}")                    
 
 
 if __name__ == "__main__":
     app = PowerCal()
     app.run()
-
